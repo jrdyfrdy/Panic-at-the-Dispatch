@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Panic at the Dispatch</title>
+    <!-- Tailwind CSS (CDN for easy setup, download for pure offline) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              "tatag-blue": "#0009FF",
+            },
+            fontFamily: {
+              sans: [
+                "Segoe UI",
+                "Roboto",
+                "Helvetica Neue",
+                "Arial",
+                "sans-serif",
+              ],
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="style.css" />
+    <!-- Import map for Three.js -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body
+    class="overflow-hidden m-0 p-0 font-sans bg-white text-tatag-blue select-none"
+  >
+    <!-- 3D Canvas Container -->
+    <div id="game-container" class="absolute inset-0 w-full h-full z-0"></div>
+
+    <!-- Start Screen -->
+    <div
+      id="start-screen"
+      class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white"
+    >
+      <div class="flex items-center mb-4">
+        <svg
+          width="80"
+          height="80"
+          viewBox="0 0 100 100"
+          class="fill-tatag-blue"
+        >
+          <!-- Shield with pulse -->
+          <path
+            d="M50 5 L10 20 L10 50 C10 75 50 95 50 95 C50 95 90 75 90 50 L90 20 Z"
+            fill="none"
+            stroke="#0009FF"
+            stroke-width="5"
+          />
+          <path
+            d="M25 50 L40 50 L47 30 L55 70 L62 50 L75 50"
+            fill="none"
+            stroke="#0009FF"
+            stroke-width="4"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <h1 class="text-6xl font-bold ml-6">TATAG</h1>
+      </div>
+      <h2 class="text-2xl font-medium mb-10 tracking-wide">
+        Panic at the Dispatch: Expo Challenge
+      </h2>
+      <button
+        id="start-btn"
+        class="bg-tatag-blue text-white px-10 py-4 text-xl font-bold rounded shadow-lg hover:bg-blue-800 transition-colors"
+      >
+        START MISSION
+      </button>
+      <p class="mt-8 text-sm text-gray-500">
+        Click to lock pointer, WASD to move. Find the target.
+      </p>
+    </div>
+
+    <!-- Red Screen Tint -->
+    <div
+      id="red-tint"
+      class="hidden absolute inset-0 z-30 bg-red-600 pointer-events-none transition-opacity duration-500 ease-in-out opacity-0 mix-blend-multiply"
+    ></div>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden absolute inset-0 z-40 pointer-events-none">
+      
+      <!-- Minimap Radar -->
+      <canvas id="minimap" width="200" height="200" class="absolute top-6 left-6 border-4 border-tatag-blue shadow-2xl bg-white opacity-95 rounded-sm"></canvas>
+
+      <div class="w-full flex justify-center pt-2">
+        <div
+          class="bg-tatag-blue text-white px-6 py-2 text-2xl font-bold rounded-b-md shadow"
+        >
+          TIME: <span id="timer-display">0.00s</span>
+        </div>
+      </div>
+      <div
+        class="absolute bottom-4 right-6 opacity-30 text-8xl font-black tracking-widest text-tatag-blue"
+      >
+        TATAG
+      </div>
+      <!-- Crosshair -->
+      <div class="absolute inset-0 flex items-center justify-center">
+        <div
+          class="w-1.5 h-1.5 bg-white rounded-full mix-blend-difference"
+        ></div>
+      </div>
+    </div>
+
+    <!-- Initials Modal -->
+    <div
+      id="initials-modal"
+      class="hidden absolute inset-0 z-50 bg-white/90 flex items-center justify-center backdrop-blur-sm"
+    >
+      <div
+        class="bg-white border-4 border-tatag-blue p-8 shadow-2xl w-full max-w-sm text-center"
+      >
+        <h2 class="text-2xl font-bold mb-4">MISSION COMPLETE</h2>
+        <p class="mb-4">Time: <span id="final-time-modal"></span>s</p>
+        <input
+          type="text"
+          id="initials-input"
+          maxlength="3"
+          class="w-32 text-center text-4xl font-bold border-b-4 border-tatag-blue focus:outline-none uppercase bg-transparent mb-6 text-tatag-blue"
+          placeholder="___"
+        />
+        <br />
+        <button
+          id="submit-initials"
+          class="bg-tatag-blue text-white px-8 py-3 font-bold hover:bg-blue-800 transition"
+        >
+          SUBMIT
+        </button>
+      </div>
+    </div>
+
+    <!-- Results Dashboard -->
+    <div
+      id="results-screen"
+      class="hidden absolute inset-0 z-50 bg-white flex flex-col items-center justify-start py-10 overflow-y-auto"
+    >
+      <div
+        class="w-full max-w-5xl bg-tatag-blue text-white text-center py-4 mb-8"
+      >
+        <h1 class="text-3xl font-black tracking-widest">
+          TATAG SYSTEM OPERATIONAL REPORT
+        </h1>
+      </div>
+
+      <div
+        class="grid grid-cols-1 md:grid-cols-2 w-full max-w-5xl shadow-2xl border-4 border-tatag-blue"
+      >
+        <div
+          class="bg-tatag-blue text-white p-10 flex flex-col justify-center items-center"
+        >
+          <h2 class="text-2xl font-bold mb-6">HUMAN DISPATCHER (W/MOUSE)</h2>
+          <div class="text-5xl font-mono font-black" id="human-time">
+            Manual Routing: --.--s
+          </div>
+        </div>
+        <div
+          class="bg-white text-tatag-blue p-10 flex flex-col justify-center items-center border-l-4 border-tatag-blue relative"
+        >
+          <h2 class="text-2xl font-bold mb-6">TATAG SYSTEM (AI)</h2>
+          <div class="flex items-center gap-6">
+            <svg
+              width="60"
+              height="60"
+              viewBox="0 0 100 100"
+              class="fill-tatag-blue animate-pulse"
+            >
+              <path d="M50 10 A40 40 0 0 0 10 50 L30 50 A20 20 0 0 1 50 30 Z" />
+              <path d="M50 20 A30 30 0 0 0 20 50 L40 50 A10 10 0 0 1 50 40 Z" />
+              <circle cx="50" cy="50" r="10" />
+              <rect x="45" y="60" width="10" height="40" />
+            </svg>
+            <div class="text-6xl font-mono font-black">
+              AI Routing Time: 0.205s
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Leaderboard -->
+      <div class="mt-12 w-full max-w-3xl">
+        <h3 class="text-2xl font-bold mb-4 text-center">TOP DISPATCHERS</h3>
+        <table
+          class="w-full text-left border-collapse border-2 border-tatag-blue"
+        >
+          <thead>
+            <tr class="bg-tatag-blue text-white">
+              <th class="p-3 border-b border-white">RANK</th>
+              <th class="p-3 border-b border-white">INITIALS</th>
+              <th class="p-3 border-b border-white">TIME (s)</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboard-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <button
+        id="restart-btn"
+        class="mt-10 bg-tatag-blue text-white px-8 py-3 text-lg font-bold rounded hover:bg-blue-800 transition"
+      >
+        RETRY MISSION
+      </button>
+      <div class="mt-10 text-xs opacity-50">
+        Admin: Shift+E to Export CSV | Shift+R to Reset Data | Shift+P for Settings
+      </div>
+    </div>
+
+    <!-- Dev Settings Modal -->
+    <div id="dev-settings-modal" class="hidden absolute inset-0 z-[60] bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm pointer-events-auto">
+      <div class="bg-white border-4 border-tatag-blue p-8 shadow-2xl w-full max-w-md">
+        <h2 class="text-2xl font-bold mb-4 text-tatag-blue">DEV SETTINGS</h2>
+        
+        <label class="block mb-2 font-bold text-sm">Maze Size (Odd number)</label>
+        <input type="number" id="setting-maze-size" class="w-full mb-4 p-2 border border-tatag-blue" value="21">
+        
+        <label class="block mb-2 font-bold text-sm">Player Speed</label>
+        <input type="number" id="setting-speed" class="w-full mb-4 p-2 border border-tatag-blue" value="40">
+        
+        <label class="block mb-2 font-bold text-sm">Time Limit (Seconds)</label>
+        <input type="number" id="setting-time-limit" class="w-full mb-6 p-2 border border-tatag-blue" value="300">
+        
+        <div class="flex justify-end gap-4">
+          <button id="close-dev-btn" class="px-4 py-2 border-2 border-tatag-blue text-tatag-blue font-bold hover:bg-gray-100">CANCEL</button>
+          <button id="save-dev-btn" class="px-4 py-2 bg-tatag-blue text-white font-bold hover:bg-blue-800">SAVE & RESTART</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Game Script -->
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

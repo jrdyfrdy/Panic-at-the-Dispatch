@@ -1,0 +1,20 @@
+/* Minimal custom CSS since we use Tailwind for mostly everything */
+
+input#initials-input::placeholder {
+    color: #0009FF;
+    opacity: 0.3;
+}
+
+/* Custom scrollbar for leaderboard if needed */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+::-webkit-scrollbar-thumb {
+    background: #0009FF;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #0006aa;
+}
