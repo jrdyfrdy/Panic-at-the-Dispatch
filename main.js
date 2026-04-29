@@ -12,14 +12,14 @@ const state = {
 // --- CONSTANTS & CONFIG ---
 const devConfig = {
     mazeSize: 21,
-    cellSize: 4,
+    cellSize: 8, // Doubled for wider vehicle lanes
     playerSpeed: 40.0,
     timeLimit: 300, // 300 seconds = 5 minutes
     audioEnabled: true,
     minimapEnabled: true
 };
 
-const WALL_HEIGHT = 6;
+const WALL_HEIGHT = 24; // Much taller buildings
 const COLOR_BLUE = 0x0009FF;
 const COLOR_WHITE = 0xFFFFFF;
 
@@ -359,8 +359,8 @@ function initMaze() {
     buildGridMeshes();
 
     // Setup Target
-    const targetGeoOuter = new THREE.OctahedronGeometry(1.5);
-    const targetGeoInner = new THREE.OctahedronGeometry(0.8);
+    const targetGeoOuter = new THREE.OctahedronGeometry(2.5);
+    const targetGeoInner = new THREE.OctahedronGeometry(1.5);
     const outer = new THREE.Mesh(targetGeoOuter, targetOuterMsg);
     const inner = new THREE.Mesh(targetGeoInner, targetInnerMsg);
     targetMesh = new THREE.Group();
@@ -373,16 +373,17 @@ function initMaze() {
 
     targetPos.set(
         (endCoords.x - devConfig.mazeSize/2) * devConfig.cellSize,
-        2,
+        3.0,
         (endCoords.z - devConfig.mazeSize/2) * devConfig.cellSize
     );
     targetMesh.position.copy(targetPos);
     scene.add(targetMesh);
 
     // Position Camera lower like in a vehicle
+    // (Adjusted for wider paths and ambulance dashboard height)
     camera.position.set(
         (startCoords.x - devConfig.mazeSize/2) * devConfig.cellSize,
-        1.5,
+        2.5,
         (startCoords.z - devConfig.mazeSize/2) * devConfig.cellSize
     );
 }
@@ -547,7 +548,7 @@ document.addEventListener('keyup', (event) => {
 
 function checkCollision(targetPosition) {
     // Precise grid-based Axis-Aligned Bounding Box (AABB) collision to completely prevent clipping
-    const pr = 0.8; // Player's physical width/radius
+    const pr = 1.6; // Player's physical width/radius (bumped up for ambulance size)
     
     // Convert world position boundaries -> integer grid map cells they touch
     const minXGrid = Math.floor((targetPosition.x - pr) / devConfig.cellSize + devConfig.mazeSize / 2 + 0.5);
@@ -691,8 +692,8 @@ function animate() {
         // Apply finalized safe position
         camera.position.copy(intendedPos);
         
-        // Ensure height stays fixed
-        camera.position.y = 1.5;
+        // Ensure height stays fixed (driver height)
+        camera.position.y = 2.5;
 
         // Target rotation
         if (targetMesh) {
