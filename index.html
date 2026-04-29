@@ -94,9 +94,13 @@
 
     <!-- HUD -->
     <div id="hud" class="hidden absolute inset-0 z-40 pointer-events-none">
-      
       <!-- Minimap Radar -->
-      <canvas id="minimap" width="200" height="200" class="absolute top-6 left-6 border-4 border-tatag-blue shadow-2xl bg-white opacity-95 rounded-sm"></canvas>
+      <canvas
+        id="minimap"
+        width="200"
+        height="200"
+        class="absolute top-6 left-6 border-4 border-tatag-blue shadow-2xl bg-white opacity-95 rounded-sm"
+      ></canvas>
 
       <div class="w-full flex justify-center pt-2">
         <div
@@ -218,37 +222,80 @@
         RETRY MISSION
       </button>
       <div class="mt-10 text-xs opacity-50">
-        Admin: Shift+E to Export CSV | Shift+R to Reset Data | Shift+P for Settings
+        Admin: Shift+E to Export CSV | Shift+R to Reset Data | Shift+P for
+        Settings
       </div>
     </div>
 
     <!-- Dev Settings Modal -->
-    <div id="dev-settings-modal" class="hidden absolute inset-0 z-[60] bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm pointer-events-auto">
-      <div class="bg-white border-4 border-tatag-blue p-8 shadow-2xl w-full max-w-md">
+    <div
+      id="dev-settings-modal"
+      class="hidden absolute inset-0 z-[60] bg-black/50 flex flex-col items-center justify-center backdrop-blur-sm pointer-events-auto"
+    >
+      <div
+        class="bg-white border-4 border-tatag-blue p-8 shadow-2xl w-full max-w-md"
+      >
         <h2 class="text-2xl font-bold mb-4 text-tatag-blue">DEV SETTINGS</h2>
-        
-        <label class="block mb-2 font-bold text-sm">Maze Size (Odd number)</label>
-        <input type="number" id="setting-maze-size" class="w-full mb-4 p-2 border border-tatag-blue" value="21">
-        
+
+        <label class="block mb-2 font-bold text-sm"
+          >Maze Size (Odd number)</label
+        >
+        <input
+          type="number"
+          id="setting-maze-size"
+          class="w-full mb-4 p-2 border border-tatag-blue"
+          value="21"
+        />
+
         <label class="block mb-2 font-bold text-sm">Player Speed</label>
-        <input type="number" id="setting-speed" class="w-full mb-4 p-2 border border-tatag-blue" value="40">
-        
+        <input
+          type="number"
+          id="setting-speed"
+          class="w-full mb-4 p-2 border border-tatag-blue"
+          value="40"
+        />
+
         <label class="block mb-2 font-bold text-sm">Time Limit (Seconds)</label>
-        <input type="number" id="setting-time-limit" class="w-full mb-4 p-2 border border-tatag-blue" value="300">
-        
+        <input
+          type="number"
+          id="setting-time-limit"
+          class="w-full mb-4 p-2 border border-tatag-blue"
+          value="300"
+        />
+
         <label class="flex items-center mb-2 font-bold text-sm">
-          <input type="checkbox" id="setting-audio" class="mr-2 w-5 h-5 accent-tatag-blue" checked> 
+          <input
+            type="checkbox"
+            id="setting-audio"
+            class="mr-2 w-5 h-5 accent-tatag-blue"
+            checked
+          />
           Enable Audio
         </label>
-        
+
         <label class="flex items-center mb-6 font-bold text-sm">
-          <input type="checkbox" id="setting-minimap" class="mr-2 w-5 h-5 accent-tatag-blue" checked> 
+          <input
+            type="checkbox"
+            id="setting-minimap"
+            class="mr-2 w-5 h-5 accent-tatag-blue"
+            checked
+          />
           Show Minimap
         </label>
-        
+
         <div class="flex justify-end gap-4">
-          <button id="close-dev-btn" class="px-4 py-2 border-2 border-tatag-blue text-tatag-blue font-bold hover:bg-gray-100">CANCEL</button>
-          <button id="save-dev-btn" class="px-4 py-2 bg-tatag-blue text-white font-bold hover:bg-blue-800">SAVE & RESTART</button>
+          <button
+            id="close-dev-btn"
+            class="px-4 py-2 border-2 border-tatag-blue text-tatag-blue font-bold hover:bg-gray-100"
+          >
+            CANCEL
+          </button>
+          <button
+            id="save-dev-btn"
+            class="px-4 py-2 bg-tatag-blue text-white font-bold hover:bg-blue-800"
+          >
+            SAVE & RESTART
+          </button>
         </div>
       </div>
     </div>
