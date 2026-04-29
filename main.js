@@ -183,20 +183,45 @@ scene.add(dirLight);
 // --- AUDIO SETUP ---
 // Placeholders for your background music tracks! Just rename the files below.
 const START_BGM_FILE = "start_bgm.mp3"; // Loading / Start Screen music
+const HORROR_BGM_FILE = "horror_bgm.mp3"; // Horror mode music that kicks in after time runs out
 const GAME_BGM_FILE = "game_bgm.mp3"; // Active Gameplay music
 const END_BGM_FILE = "end_bgm.mp3"; // Leaderboard / End screen music
 
 const startBGM = new Audio(START_BGM_FILE);
 startBGM.loop = true;
+const horrorBGM = new Audio(HORROR_BGM_FILE);
+horrorBGM.loop = true;
 const gameBGM = new Audio(GAME_BGM_FILE);
 gameBGM.loop = true;
 const endBGM = new Audio(END_BGM_FILE);
 endBGM.loop = true;
 
+// --- COUNTDOWN BEEP SYSTEM ---
+let lastBeepSecond = -1;
+
+function playCountdownBeep() {
+  if (!devConfig.audioEnabled || audioCtx.state === "suspended") return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(800, now); // 800Hz is a clear, urgent beep
+
+  gain.gain.setValueAtTime(0.3, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(now);
+  osc.stop(now + 0.15);
+}
+
 // Helper to switch audio states
 function updateAudioState() {
   // 1. Pause all first to prevent overlapping
   startBGM.pause();
+  horrorBGM.pause();
   gameBGM.pause();
   endBGM.pause();
 
@@ -213,11 +238,15 @@ function updateAudioState() {
           console.log("Waiting for user interaction to play audio."),
         );
     } else if (state.isRunning) {
-      gameBGM
-        .play()
-        .catch((e) =>
-          console.log("Waiting for user interaction to play audio."),
-        );
+      if (devConfig.horrorModeEnabled) {
+        horrorBGM
+          .play()
+          .catch((e) => console.log("Waiting for user interaction"));
+      } else {
+        gameBGM
+          .play()
+          .catch((e) => console.log("Waiting for user interaction"));
+      }
     } else {
       startBGM
         .play()
@@ -728,7 +757,8 @@ saveDevBtn.addEventListener("click", () => {
   localStorage.setItem("tatag_dev_settings", JSON.stringify(devConfig));
 
   devModal.classList.add("hidden");
-  // Reset and regenerate maze with new config
+
+  lastBeepSecond = -1;
   state.timeElapsed = 0;
   state.won = false;
   redTint.style.opacity = 0;
@@ -828,8 +858,8 @@ function drawMinimap() {
   minimapCtx.fillStyle = "#EF4444"; // Red Target
   minimapCtx.beginPath();
   minimapCtx.arc(
-    (devConfig.mazeSize - 2) * cellW + cellW / 2,
-    (devConfig.mazeSize - 2) * cellH + cellH / 2,
+    (devConfig.mazeSize - 1) * cellW + cellW / 2,
+    (devConfig.mazeSize - 1) * cellH + cellH / 2,
     cellW / 2.5,
     0,
     Math.PI * 2,
@@ -847,7 +877,7 @@ function drawMinimap() {
   minimapCtx.arc(
     (pGridX + 0.5) * cellW,
     (pGridZ + 0.5) * cellH,
-    cellW / 2,
+    cellW * 1.5,
     0,
     Math.PI * 2,
   );
@@ -897,9 +927,26 @@ function animate() {
     // Render updated GPS tracking minimap every frame
     drawMinimap();
 
+    state.timeElapsed = (time - state.startTime) / 1000;
+    timerDisplay.textContent = state.timeElapsed.toFixed(2) + "s";
+
+    // --- 10 SECOND COUNTDOWN BEEP ---
+    // Only beep if Horror Mode is OFF (since Horror Mode has no time limit death)
+    if (!devConfig.horrorModeEnabled) {
+      let currentSecond = Math.floor(state.timeElapsed);
+      let remainingSeconds = devConfig.timeLimit - currentSecond;
+
+      if (
+        remainingSeconds <= 10 &&
+        remainingSeconds > 0 &&
+        currentSecond !== lastBeepSecond
+      ) {
+        lastBeepSecond = currentSecond;
+        playCountdownBeep();
+      }
+    }
     // Red screen effect
     // Check for Game Over
-    // --- TIME & ESCALATION SCALING ---
     // --- TIME & ESCALATION SCALING ---
     let limit = devConfig.timeLimit;
     let timeProgress = state.timeElapsed / limit;
@@ -1253,6 +1300,7 @@ function triggerGameOver(reason) {
   controls.unlock();
 
   startBGM.pause();
+  horrorBGM.pause();
   gameBGM.pause();
   endBGM.pause();
 
@@ -1276,7 +1324,7 @@ function triggerGameOver(reason) {
 
   flashScreen.innerHTML = `
     <div style="font-size: 10vw; color: red; font-weight: 900;">${mainTitle}</div>
-    <div style="font-size: 4vw; color: darkred; margin-top: 10px;">Patient is dead.</div>
+
     <div style="font-size: 2vw; color: white; margin-top: 50px; animation: pulse 1s infinite;">
       Click anywhere to restart
     </div>
@@ -1315,6 +1363,7 @@ restartBtn.addEventListener("click", () => {
   monsterMesh = null;
   camera.fov = 75;
   camera.updateProjectionMatrix();
+  lastBeepSecond = -1;
   state.timeElapsed = 0;
   state.won = false;
   redTint.style.opacity = 0;
