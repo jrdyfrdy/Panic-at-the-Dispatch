@@ -255,6 +255,25 @@
           value="40"
         />
 
+        <label class="block mb-2 font-bold text-sm"
+          >Monster Speed (% of Player)</label
+        >
+        <div class="flex items-center mb-4">
+          <input
+            type="range"
+            id="setting-monster-speed"
+            min="0"
+            max="100"
+            value="35"
+            class="w-full mr-3 accent-tatag-blue"
+          />
+          <span
+            id="monster-speed-val"
+            class="font-mono font-bold w-10 text-right"
+            >35%</span
+          >
+        </div>
+
         <label class="block mb-2 font-bold text-sm">Time Limit (Seconds)</label>
         <input
           type="number"
@@ -273,7 +292,7 @@
           Enable Audio
         </label>
 
-        <label class="flex items-center mb-6 font-bold text-sm">
+        <label class="flex items-center mb-2 font-bold text-sm">
           <input
             type="checkbox"
             id="setting-minimap"
@@ -281,6 +300,16 @@
             checked
           />
           Show Minimap
+        </label>
+
+        <label class="flex items-center mb-6 font-bold text-sm">
+          <input
+            type="checkbox"
+            id="setting-horror"
+            class="mr-2 w-5 h-5 accent-tatag-blue"
+            checked
+          />
+          Horror Mode (Monster & Panic)
         </label>
 
         <div class="flex justify-end gap-4">

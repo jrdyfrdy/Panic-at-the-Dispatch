@@ -38,6 +38,40 @@ function playHeartbeat(timeProgress) {
   osc.stop(now + 0.3);
 }
 
+// --- MONSTER AUDIO SYSTEM ---
+let monsterOsc = null;
+let monsterGain = null;
+
+function startMonsterSound() {
+  if (!devConfig.audioEnabled || audioCtx.state === "suspended") return;
+
+  monsterOsc = audioCtx.createOscillator();
+  monsterGain = audioCtx.createGain();
+
+  // Sawtooth creates a harsh, grinding/buzzing noise
+  monsterOsc.type = "sawtooth";
+  monsterOsc.frequency.setValueAtTime(40, audioCtx.currentTime); // Low rumble
+
+  // Start perfectly silent
+  monsterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+
+  monsterOsc.connect(monsterGain);
+  monsterGain.connect(audioCtx.destination);
+  monsterOsc.start();
+}
+
+function stopMonsterSound() {
+  if (monsterOsc) {
+    monsterOsc.stop();
+    monsterOsc.disconnect();
+    monsterOsc = null;
+  }
+  if (monsterGain) {
+    monsterGain.disconnect();
+    monsterGain = null;
+  }
+}
+
 // --- CONSTANTS & CONFIG ---
 const defaultDevConfig = {
   mazeSize: 21,
@@ -46,6 +80,8 @@ const defaultDevConfig = {
   timeLimit: 300,
   audioEnabled: true,
   minimapEnabled: false,
+  horrorModeEnabled: true,
+  monsterSpeedPct: 35,
 };
 
 // Attempt to load saved settings, otherwise use the defaults above
@@ -79,6 +115,9 @@ const inputSpeed = document.getElementById("setting-speed");
 const inputTimeLimit = document.getElementById("setting-time-limit");
 const inputAudio = document.getElementById("setting-audio");
 const inputMinimap = document.getElementById("setting-minimap");
+const inputHorror = document.getElementById("setting-horror");
+const inputMonsterSpeed = document.getElementById("setting-monster-speed");
+const monsterSpeedVal = document.getElementById("monster-speed-val");
 const closeDevBtn = document.getElementById("close-dev-btn");
 const saveDevBtn = document.getElementById("save-dev-btn");
 
@@ -106,6 +145,10 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.getElementById("game-container").appendChild(renderer.domElement);
 
 const controls = new PointerLockControls(camera, document.body);
+
+inputMonsterSpeed.addEventListener("input", (e) => {
+  monsterSpeedVal.textContent = e.target.value + "%";
+});
 
 startBtn.addEventListener("click", () => {
   controls.lock();
@@ -230,25 +273,27 @@ const rescueSound = {
 
 let lastFootstep = 0;
 function playFootstepSynth() {
-  if (!devConfig.audioEnabled) return;
-  if (audioCtx.state === "suspended") return;
+  if (!devConfig.audioEnabled || audioCtx.state === "suspended") return;
   const now = audioCtx.currentTime;
-  if (now - lastFootstep < 0.35) return; // limit footstep frequency
+  if (now - lastFootstep < 0.35) return;
   lastFootstep = now;
 
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
-  osc.type = "square";
-  osc.frequency.setValueAtTime(80, now);
-  osc.frequency.exponentialRampToValueAtTime(10, now + 0.05); // low thud
 
-  gain.gain.setValueAtTime(0.1, now);
-  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+  // Use a low sine wave for a heavier "boot thump" sound
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(120, now);
+  osc.frequency.exponentialRampToValueAtTime(20, now + 0.1);
+
+  // Make it louder (0.4) and snappier
+  gain.gain.setValueAtTime(0.4, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
   osc.start(now);
-  osc.stop(now + 0.1);
+  osc.stop(now + 0.2);
 }
 
 // --- PROCEDURAL TEXTURES ---
@@ -650,6 +695,9 @@ function openDevSettings() {
   inputTimeLimit.value = devConfig.timeLimit;
   inputAudio.checked = devConfig.audioEnabled;
   inputMinimap.checked = devConfig.minimapEnabled;
+  inputHorror.checked = devConfig.horrorModeEnabled;
+  inputMonsterSpeed.value = devConfig.monsterSpeedPct;
+  monsterSpeedVal.textContent = devConfig.monsterSpeedPct + "%";
   devModal.classList.remove("hidden");
 }
 
@@ -672,6 +720,8 @@ saveDevBtn.addEventListener("click", () => {
   devConfig.timeLimit = parseFloat(inputTimeLimit.value) || 300;
   devConfig.audioEnabled = inputAudio.checked;
   devConfig.minimapEnabled = inputMinimap.checked;
+  devConfig.horrorModeEnabled = inputHorror.checked;
+  devConfig.monsterSpeedPct = parseInt(inputMonsterSpeed.value) || 35;
   minimapCanvas.style.display = devConfig.minimapEnabled ? "block" : "none";
 
   // --- ADD THIS LINE TO SAVE TO BROWSER ---
@@ -686,6 +736,7 @@ saveDevBtn.addEventListener("click", () => {
   resultsScreen.classList.add("hidden");
   startScreen.classList.remove("hidden");
 
+  stopMonsterSound();
   updateAudioState();
 });
 
@@ -849,154 +900,211 @@ function animate() {
     // Red screen effect
     // Check for Game Over
     // --- TIME & ESCALATION SCALING ---
+    // --- TIME & ESCALATION SCALING ---
     let limit = devConfig.timeLimit;
     let timeProgress = state.timeElapsed / limit;
 
-    // Trigger Game Over on Timeout
-    if (state.timeElapsed >= limit) {
+    // Trigger Game Over on Timeout ONLY if Horror Mode is OFF
+    if (!devConfig.horrorModeEnabled && state.timeElapsed >= limit) {
       triggerGameOver("TIME");
       return;
     }
 
-    // --- SENSORY PANIC EFFECTS ---
-    // 1. Heartbeat accelerates
-    playHeartbeat(timeProgress);
+    // Cap progress at 1.0 so effects don't break the math if the game goes on forever
+    let effectProgress = Math.min(timeProgress, 1.0);
 
-    // 2. FOV slowly warps from 75 to 110, creating dizzying tunnel vision
-    camera.fov = 75 + timeProgress * 35;
-    camera.updateProjectionMatrix();
+    // --- SENSORY EFFECTS & RED SCREEN ---
+    if (devConfig.horrorModeEnabled) {
+      // 1. Heartbeat accelerates
+      playHeartbeat(effectProgress);
 
-    // 3. Updated Red Screen Logic
-    let baseOpacity = timeProgress * 2;
-    baseOpacity = Math.min(baseOpacity, 0.95);
+      // 2. FOV slowly warps from 75 to 110, creating dizzying tunnel vision
+      camera.fov = 75 + effectProgress * 35;
+      camera.updateProjectionMatrix();
 
-    let pulse = 0;
-    if (timeProgress > 0.8) {
-      pulse = Math.sin(time * 0.04) * 0.15;
+      // 3. Intense Red Screen Logic
+      let baseOpacity = effectProgress * 2;
+      baseOpacity = Math.min(baseOpacity, 0.95);
+
+      let pulse = 0;
+      if (effectProgress > 0.8) {
+        pulse = Math.sin(time * 0.04) * 0.15;
+      }
+
+      let opacity = Math.min(Math.max(baseOpacity + pulse, 0), 1.0);
+      redTint.classList.remove("hidden");
+      redTint.style.opacity = opacity;
+    } else {
+      // --- MILD MODE (Horror OFF) ---
+      // No heartbeat, keep FOV normal
+      camera.fov = 75;
+      camera.updateProjectionMatrix();
+
+      // Gentle red tint that caps at 40% max opacity and doesn't pulse
+      let opacity = effectProgress * 0.8;
+      opacity = Math.min(opacity, 0.4);
+      redTint.classList.remove("hidden");
+      redTint.style.opacity = opacity;
     }
 
-    let opacity = Math.min(Math.max(baseOpacity + pulse, 0), 1.0);
-    redTint.classList.remove("hidden");
-    redTint.style.opacity = opacity;
-
     // --- THE MONSTER (50% MARK) ---
-    if (timeProgress >= 0.5) {
+    if (devConfig.horrorModeEnabled && timeProgress >= 0.5) {
       // Spawn it once
       if (!monsterMesh) {
-        const mGeo = new THREE.IcosahedronGeometry(1.5, 0);
-        // A pitch-black geometric anomaly with a glowing red wireframe
-        const mMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-        monsterMesh = new THREE.Mesh(mGeo, mMat);
+        monsterMesh = new THREE.Group();
 
-        const mWire = new THREE.LineSegments(
-          new THREE.EdgesGeometry(mGeo),
-          new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 }),
-        );
-        monsterMesh.add(mWire);
+        // Semi-transparent pitch black material
+        const shadowMat = new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          transparent: true,
+          opacity: 0.85,
+        });
 
-        // Spawn it exactly at the target/patient position so it chases you BACKWARDS through the maze
-        // Calculate the exact 3D world coordinates of your starting position (grid x: 1, z: 1)
+        // 1. Tall, Slender Slender-Man Style Body
+        const bodyGeo = new THREE.CapsuleGeometry(0.3, 2.5, 4, 16);
+        const body = new THREE.Mesh(bodyGeo, shadowMat);
+        body.position.y = 1.6;
+        monsterMesh.add(body);
+
+        // 2. Head
+        const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
+        const head = new THREE.Mesh(headGeo, shadowMat);
+        head.position.y = 3.2;
+        monsterMesh.add(head);
+
+        // 3. Glowing Red Eyes
+        const eyeGeo = new THREE.SphereGeometry(0.05, 8, 8);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.15, 3.25, 0.32);
+        const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+        rightEye.position.set(0.15, 3.25, 0.32);
+        monsterMesh.add(leftEye);
+        monsterMesh.add(rightEye);
+
+        // Calculate spawn at the maze entrance
         const startX = (1 - devConfig.mazeSize / 2) * devConfig.cellSize;
         const startZ = (1 - devConfig.mazeSize / 2) * devConfig.cellSize;
-        monsterMesh.position.set(startX, 2, startZ); // Spawn at the entrance!
-        monsterMesh.position.y = 2;
+        monsterMesh.position.set(startX, 0, startZ);
+
+        // --- ADD A 3 SECOND GRACE PERIOD ---
+        monsterMesh.userData.wakeTime = performance.now() + 3000;
+
         scene.add(monsterMesh);
       }
 
-      // --- MONSTER PATHFINDING & MOVEMENT ---
-      // Monster moves at 85% of the player's top speed
-      const step = devConfig.playerSpeed * 0.85 * delta;
+      // --- WAKING UP PHASE (3 SECONDS) ---
+      if (performance.now() < monsterMesh.userData.wakeTime) {
+        monsterMesh.position.x += (Math.random() - 0.5) * 0.1;
+        monsterMesh.position.z += (Math.random() - 0.5) * 0.1;
+        monsterMesh.lookAt(
+          camera.position.x,
+          monsterMesh.position.y,
+          camera.position.z,
+        );
 
-      // 1. Convert Monster and Player world coordinates to Grid (x, z) integers
-      const mGridX = Math.floor(
-        monsterMesh.position.x / devConfig.cellSize +
-          devConfig.mazeSize / 2 +
-          0.5,
-      );
-      const mGridZ = Math.floor(
-        monsterMesh.position.z / devConfig.cellSize +
-          devConfig.mazeSize / 2 +
-          0.5,
-      );
+        // Ensure sound starts playing (silently) during wakeup
+        if (!monsterOsc) startMonsterSound();
+      } else {
+        // --- MONSTER PATHFINDING & MOVEMENT ---
+        // Dynamically use the UI Slider percentage!
+        const speedMultiplier = devConfig.monsterSpeedPct / 100.0;
+        const step = (devConfig.playerSpeed / 10.0) * speedMultiplier * delta;
 
-      const pGridX = Math.floor(
-        camera.position.x / devConfig.cellSize + devConfig.mazeSize / 2 + 0.5,
-      );
-      const pGridZ = Math.floor(
-        camera.position.z / devConfig.cellSize + devConfig.mazeSize / 2 + 0.5,
-      );
+        // 1. Convert Monster and Player world coordinates to Grid (x, z) integers
+        const mGridX = Math.floor(
+          monsterMesh.position.x / devConfig.cellSize +
+            devConfig.mazeSize / 2 +
+            0.5,
+        );
+        const mGridZ = Math.floor(
+          monsterMesh.position.z / devConfig.cellSize +
+            devConfig.mazeSize / 2 +
+            0.5,
+        );
+        const pGridX = Math.floor(
+          camera.position.x / devConfig.cellSize + devConfig.mazeSize / 2 + 0.5,
+        );
+        const pGridZ = Math.floor(
+          camera.position.z / devConfig.cellSize + devConfig.mazeSize / 2 + 0.5,
+        );
 
-      // 2. Ask your existing BFS function for the shortest path
-      const path = checkSolvable(
-        { x: mGridX, z: mGridZ },
-        { x: pGridX, z: pGridZ },
-      );
+        // 2. Ask your existing BFS function for the shortest path
+        const path = checkSolvable(
+          { x: mGridX, z: mGridZ },
+          { x: pGridX, z: pGridZ },
+        );
 
-      // Default target is directly at the player (fallback)
-      let targetX = camera.position.x;
-      let targetZ = camera.position.z;
+        let targetX = camera.position.x;
+        let targetZ = camera.position.z;
 
-      // 3. If a path exists and has at least a "next step" (index 1)
-      if (path && path.length > 1) {
-        const nextNode = path[1]; // path[0] is the current grid, path[1] is the next cell to move to
-
-        // Convert that single grid cell back into 3D world space
-        targetX = (nextNode.x - devConfig.mazeSize / 2) * devConfig.cellSize;
-        targetZ = (nextNode.z - devConfig.mazeSize / 2) * devConfig.cellSize;
-      }
-
-      // 4. Calculate direction vector to the target node
-      const targetPoint = new THREE.Vector3(
-        targetX,
-        monsterMesh.position.y,
-        targetZ,
-      );
-      const dir = new THREE.Vector3().subVectors(
-        targetPoint,
-        monsterMesh.position,
-      );
-
-      // Only move if we aren't completely overlapping the exact center of the node to prevent jitter
-      if (dir.length() > 0.1) {
-        dir.normalize();
-        dir.y = 0;
-
-        // --- Apply Sliding Collision to the Monster ---
-        const mOrigPos = monsterMesh.position.clone();
-        const mIntendedPos = monsterMesh.position
-          .clone()
-          .addScaledVector(dir, step);
-        let testPos = mOrigPos.clone();
-
-        // Test X Collision (using 1.2 as the monster's physical radius)
-        testPos.x = mIntendedPos.x;
-        if (checkCollision(testPos, 1.2)) {
-          mIntendedPos.x = mOrigPos.x; // Blocked on X, slide
+        // 3. If a path exists and has at least a "next step" (index 1)
+        if (path && path.length > 1) {
+          const nextNode = path[1];
+          targetX = (nextNode.x - devConfig.mazeSize / 2) * devConfig.cellSize;
+          targetZ = (nextNode.z - devConfig.mazeSize / 2) * devConfig.cellSize;
         }
 
-        // Test Z Collision
-        testPos.x = mIntendedPos.x; // Use the corrected X
-        testPos.z = mIntendedPos.z;
-        if (checkCollision(testPos, 1.2)) {
-          mIntendedPos.z = mOrigPos.z; // Blocked on Z, slide
+        // 4. Calculate direction vector to the target node
+        const targetPoint = new THREE.Vector3(
+          targetX,
+          monsterMesh.position.y,
+          targetZ,
+        );
+        const dir = new THREE.Vector3().subVectors(
+          targetPoint,
+          monsterMesh.position,
+        );
+
+        if (dir.length() > 0.1) {
+          dir.normalize();
+          dir.y = 0;
+
+          // --- Apply Sliding Collision to the Monster ---
+          const mOrigPos = monsterMesh.position.clone();
+          const mIntendedPos = monsterMesh.position
+            .clone()
+            .addScaledVector(dir, step);
+          let testPos = mOrigPos.clone();
+
+          testPos.x = mIntendedPos.x;
+          if (checkCollision(testPos, 1.2)) mIntendedPos.x = mOrigPos.x;
+
+          testPos.x = mIntendedPos.x;
+          testPos.z = mIntendedPos.z;
+          if (checkCollision(testPos, 1.2)) mIntendedPos.z = mOrigPos.z;
+
+          monsterMesh.position.x = mIntendedPos.x;
+          monsterMesh.position.z = mIntendedPos.z;
         }
 
-        // Apply safe position
-        monsterMesh.position.x = mIntendedPos.x;
-        monsterMesh.position.z = mIntendedPos.z;
-      }
+        // --- SCARY SHADOW ANIMATIONS ---
+        monsterMesh.lookAt(
+          camera.position.x,
+          monsterMesh.position.y,
+          camera.position.z,
+        );
+        monsterMesh.position.y = Math.sin(time * 0.003) * 0.2;
 
-      // Creepy floating bob
-      monsterMesh.position.y = 2 + Math.sin(time * 0.01) * 0.5;
+        // --- PROXIMITY AUDIO UPDATER ---
+        if (monsterGain && devConfig.audioEnabled) {
+          const dist = camera.position.distanceTo(monsterMesh.position);
 
-      // Rotate aggressively
-      monsterMesh.rotation.x += 0.05;
-      monsterMesh.rotation.y += 0.05;
+          let vol = 1.0 - (dist - 2.0) / 33.0;
+          vol = Math.max(0, Math.min(vol, 1.0));
 
-      // --- RE-ADDED MISSING DEATH CHECK ---
-      if (camera.position.distanceTo(monsterMesh.position) < 1.5) {
-        triggerGameOver("CAUGHT");
-        return;
+          monsterGain.gain.setTargetAtTime(
+            vol * 0.4,
+            audioCtx.currentTime,
+            0.1,
+          );
+        }
+
+        // --- DEATH CHECK ---
+        if (camera.position.distanceTo(monsterMesh.position) < 1.5) {
+          triggerGameOver("CAUGHT");
+          return;
+        }
       }
     }
 
@@ -1081,6 +1189,7 @@ function triggerWin() {
 
   initialsInput.value = "";
   setTimeout(() => initialsInput.focus(), 100);
+  stopMonsterSound();
 }
 
 // --- DATA PERSISTENCE ---
@@ -1187,6 +1296,8 @@ function triggerGameOver(reason) {
     document.body.removeChild(flashScreen);
     restartBtn.click();
   });
+
+  stopMonsterSound();
 }
 
 function resetData() {
@@ -1211,7 +1322,7 @@ restartBtn.addEventListener("click", () => {
   initMaze();
   resultsScreen.classList.add("hidden");
   startScreen.classList.remove("hidden");
-
+  stopMonsterSound();
   updateAudioState();
 });
 
