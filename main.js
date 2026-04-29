@@ -302,7 +302,7 @@ let shortestPath = null;
 
 function initMaze() {
     // Clear old
-    walls.forEach(w => scene.remove(w));
+    walls.forEach(w => scene.remove(w.mesh));
     if (targetMesh) scene.remove(targetMesh);
     walls = [];
 
