@@ -877,7 +877,7 @@ function drawMinimap() {
   minimapCtx.arc(
     (pGridX + 0.5) * cellW,
     (pGridZ + 0.5) * cellH,
-    cellW * 1.5,
+    cellW,
     0,
     Math.PI * 2,
   );
