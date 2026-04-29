@@ -14,7 +14,9 @@ const devConfig = {
     mazeSize: 21,
     cellSize: 4,
     playerSpeed: 40.0,
-    timeLimit: 300 // 300 seconds = 5 minutes
+    timeLimit: 300, // 300 seconds = 5 minutes
+    audioEnabled: true,
+    minimapEnabled: true
 };
 
 const WALL_HEIGHT = 6;
@@ -41,6 +43,8 @@ const devModal = document.getElementById('dev-settings-modal');
 const inputMazeSize = document.getElementById('setting-maze-size');
 const inputSpeed = document.getElementById('setting-speed');
 const inputTimeLimit = document.getElementById('setting-time-limit');
+const inputAudio = document.getElementById('setting-audio');
+const inputMinimap = document.getElementById('setting-minimap');
 const closeDevBtn = document.getElementById('close-dev-btn');
 const saveDevBtn = document.getElementById('save-dev-btn');
 
@@ -71,15 +75,15 @@ controls.addEventListener('lock', () => {
         resultsScreen.classList.add('hidden');
         state.startTime = performance.now();
         state.isRunning = true;
-        sirenSound.play().catch(e => console.log('Audio play blocked:', e));
+        updateAudioState();
     } else if (state.isRunning && !state.won) {
-        sirenSound.play().catch(e => console.log('Audio play blocked:', e));
+        updateAudioState();
     }
 });
 
 controls.addEventListener('unlock', () => {
     if (state.isRunning) {
-        sirenSound.pause();
+        updateAudioState();
     }
 });
 
@@ -90,51 +94,58 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(10, 20, 10);
 scene.add(dirLight);
 
-// --- AUDIO SETUP (WEB AUDIO API SYNTHESIZER) ---
-// 100% Offline, no file dependencies
+// --- AUDIO SETUP ---
+// Placeholders for your background music tracks! Just rename the files below.
+const START_BGM_FILE = 'start_bgm.mp3'; // Loading / Start Screen music
+const GAME_BGM_FILE = 'game_bgm.mp3';   // Active Gameplay music
+const END_BGM_FILE = 'end_bgm.mp3';     // Leaderboard / End screen music
+
+const startBGM = new Audio(START_BGM_FILE);
+startBGM.loop = true;
+const gameBGM = new Audio(GAME_BGM_FILE);
+gameBGM.loop = true;
+const endBGM = new Audio(END_BGM_FILE);
+endBGM.loop = true;
+
+// Helper to switch audio states
+function updateAudioState() {
+    // 1. Pause all first to prevent overlapping
+    startBGM.pause();
+    gameBGM.pause();
+    endBGM.pause();
+
+    // 2. If disabled in dev settings, leave them paused
+    if (!devConfig.audioEnabled) return;
+
+    // 3. Play the right track depending on game state
+    // We wrap in try-catch because browser policies block autoplay without user interaction
+    try {
+        if (state.won || (!resultsScreen.classList.contains('hidden'))) {
+            endBGM.play().catch(e => console.log('Waiting for user interaction to play audio.'));
+        } else if (state.isRunning) {
+            gameBGM.play().catch(e => console.log('Waiting for user interaction to play audio.'));
+        } else {
+            startBGM.play().catch(e => console.log('Waiting for user interaction to play audio.'));
+        }
+    } catch (e) {
+        console.warn("Audio playback issue:", e);
+    }
+}
+
+// Ensure first click on page triggers audio if allowed
+document.addEventListener('click', () => {
+    if (startBGM.paused && gameBGM.paused && endBGM.paused) {
+        updateAudioState();
+    }
+}, { once: true });
+
+// Minimal synth for footsteps and rescue chime
 const AudioContext = window.AudioContext || window.webkitAudioContext;
 const audioCtx = new AudioContext();
 
-const sirenSound = {
-    osc: null,
-    gain: null,
-    interval: null,
-    play: async () => {
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-        if (!sirenSound.osc) {
-            sirenSound.osc = audioCtx.createOscillator();
-            sirenSound.gain = audioCtx.createGain();
-            sirenSound.osc.type = 'sawtooth';
-            sirenSound.osc.connect(sirenSound.gain);
-            sirenSound.gain.connect(audioCtx.destination);
-            
-            sirenSound.osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-            sirenSound.gain.gain.setValueAtTime(0.0, audioCtx.currentTime);
-            sirenSound.gain.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 0.5); // Very soft background volume
-            sirenSound.osc.start();
-            
-            sirenSound.interval = setInterval(() => {
-                if (audioCtx.state === 'running' && sirenSound.osc) {
-                    const time = audioCtx.currentTime;
-                    sirenSound.osc.frequency.setValueAtTime(400, time);
-                    sirenSound.osc.frequency.linearRampToValueAtTime(600, time + 0.8);
-                    sirenSound.osc.frequency.linearRampToValueAtTime(400, time + 1.6);
-                }
-            }, 1600);
-        } else {
-            sirenSound.gain.gain.linearRampToValueAtTime(0.04, audioCtx.currentTime + 0.5);
-        }
-    },
-    pause: () => {
-        if (sirenSound.gain) {
-            sirenSound.gain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
-        }
-    },
-    currentTime: 0
-};
-
 const rescueSound = {
     play: async () => {
+        if (!devConfig.audioEnabled) return Promise.resolve();
         if (audioCtx.state === 'suspended') await audioCtx.resume();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -160,6 +171,7 @@ const rescueSound = {
 
 let lastFootstep = 0;
 function playFootstepSynth() {
+    if (!devConfig.audioEnabled) return;
     if (audioCtx.state === 'suspended') return;
     const now = audioCtx.currentTime;
     if (now - lastFootstep < 0.35) return; // limit footstep frequency
@@ -490,13 +502,16 @@ function openDevSettings() {
     inputMazeSize.value = devConfig.mazeSize;
     inputSpeed.value = devConfig.playerSpeed;
     inputTimeLimit.value = devConfig.timeLimit;
+    inputAudio.checked = devConfig.audioEnabled;
+    inputMinimap.checked = devConfig.minimapEnabled;
     devModal.classList.remove('hidden');
 }
 
 closeDevBtn.addEventListener('click', () => {
     devModal.classList.add('hidden');
     // Lock again if we are running
-    if (state.isRunning) controls.lock();
+    if (state.isRunning && !state.won) controls.lock();
+    updateAudioState();
 });
 
 saveDevBtn.addEventListener('click', () => {
@@ -505,6 +520,9 @@ saveDevBtn.addEventListener('click', () => {
     devConfig.mazeSize = newSize;
     devConfig.playerSpeed = parseFloat(inputSpeed.value) || 40.0;
     devConfig.timeLimit = parseFloat(inputTimeLimit.value) || 300;
+    devConfig.audioEnabled = inputAudio.checked;
+    devConfig.minimapEnabled = inputMinimap.checked;
+    minimapCanvas.style.display = devConfig.minimapEnabled ? 'block' : 'none';
     
     devModal.classList.add('hidden');
     // Reset and regenerate maze with new config
@@ -514,6 +532,8 @@ saveDevBtn.addEventListener('click', () => {
     initMaze();
     resultsScreen.classList.add('hidden');
     startScreen.classList.remove('hidden');
+    
+    updateAudioState();
 });
 
 document.addEventListener('keyup', (event) => {
@@ -548,7 +568,7 @@ function checkCollision(targetPosition) {
 
 // --- MINIMAP RENDERER ---
 function drawMinimap() {
-    if (!minimapCtx) return;
+    if (!minimapCtx || !devConfig.minimapEnabled) return;
     
     const w = minimapCanvas.width;
     const h = minimapCanvas.height;
@@ -695,8 +715,7 @@ function triggerWin() {
     state.isRunning = false;
     state.won = true;
     
-    sirenSound.pause();
-    sirenSound.currentTime = 0;
+    updateAudioState();
     rescueSound.play().catch(e => console.log('Audio play blocked:', e));
 
     controls.unlock();
@@ -732,6 +751,7 @@ function saveScore(initials, time) {
 
 function showResults() {
     resultsScreen.classList.remove('hidden');
+    updateAudioState();
     
     let scores = JSON.parse(localStorage.getItem('tatag_scores')) || [];
     scores = scores.slice(0, 5); // top 5
@@ -785,6 +805,8 @@ restartBtn.addEventListener('click', () => {
     initMaze();
     resultsScreen.classList.add('hidden');
     startScreen.classList.remove('hidden');
+    
+    updateAudioState();
 });
 
 // Resize handler
